@@ -33,7 +33,8 @@ def call_ollama(prompt: str) -> str:
             text=True,
             capture_output=True,
             check=True,
-            timeout=60  # Timeout after 60 seconds
+            timeout=60,
+            encoding="utf-8"
         )
         end_time = time.time()
         print(f"✅ Ollama execution completed in {end_time - start_time:.2f} seconds")
