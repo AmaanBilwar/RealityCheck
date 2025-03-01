@@ -1,0 +1,69 @@
+{
+  "topic": "Trump and Zelensky clash in the Oval Office",
+  "timestamp": "2025-03-01",
+  "articles": [
+    {
+      "title": "Zelensky told to leave White House after angry spat with Trump and ...",
+      "source": "BBC News",
+      "date": "March 1, 2025",
+      "url": "https://www.bbc.com/news/live/c625ex282zzt",
+      "snippet": "BBC Newscast is dissecting Donald Trump and Volodymyr Zelensky's extraordinary clash in the Oval Office. You can listen on BBC Sounds, or ..."
+    },
+    {
+      "title": "What U.S. lawmakers are saying about Trump and Zelenskyy's clash ...",
+      "source": "PBS NewsHour",
+      "date": "March 1, 2025",
+      "url": "https://www.pbs.org/newshour/politics/what-u-s-lawmakers-are-saying-about-trump-and-zelenskyys-clash-at-the-white-house",
+      "snippet": "“What I saw in the Oval office was disrespectful and I don't know if we can ever do business with Zelenskyy again.” SECRETARY OF STATE MARCO ..."
+    },
+    {
+      "title": 'European leaders back Zelensky after Trump clash | BBC News',
+      "source": "BBC News",
+      "date": "March 1, 2025",
+      "url": "https://www.youtube.com/watch?v=Wp2d7PNECOc",
+      "snippet": "Comments15K · Watch in full as Zelensky and Trump clash in fiery Oval Office exchange | BBC News · Does Europe\'s top brass support for Zelenskyy ..."
+    },
+    {
+      "title": 'Trump-Zelenskyy clash marks a defining turn away from U.S. ...',
+      "source": "NBC News",
+      "date": "March 1, 2025",
+      "url": "https://www.nbcnews.com/politics/national-security/trump-zelenskyy-clash-marks-defining-turn-away-us-defense-democracies-rcna193975",
+      "snippet": "An ugly and unprecedented confrontation in the Oval Office hammered home President Donald Trump's hostility toward Ukraine and its president, ..."
+    },
+    {
+      "title": "Zelenskyy's White House meeting ends in blowup with Trump and ...",
+      "source": "CBS News",
+      "date": "March 1, 2025",
+      "url": "https://www.cnbc.com/2025/03/01/trump-zelenskyy-white-house-tone-elon-musk.html",
+      "snippet": 'In an Oval Office meeting, Vance and Trump accused Zelenskyy of being "disrespectful." Afterward, Zelensky and Ukrainian officials were ..."
+    },
+    {
+      "title": "Trump objected to Zelenskyy disrespect, White House says - CNBC",
+      "source": "CNBC",
+      "date": "March 1, 2025",
+      "url": "https://www.cnbc.com/2025/03/01/trump-zelenskyy-white-house-tone-elon-musk.html",
+      "snippet": 'The clash occurred when Zelenskyy challenged the idea that Russia could be trusted to honor the terms of any peace deal that would be reached ..."
+    },
+    {
+      "title": "Trump's Oval Office clash was 'un-American' and 'traitorous' - YouTube",
+      "source": "YouTube",
+      "date": "March 1, 2025",
+      "url": "https://www.youtube.com/watch?v=EiiJart9wo8",
+      "snippet": 'US Army veteran Paul Rieckhoff says what happened in the Oval Office is dangerous and America is less safe today.'
+    },
+    {
+      "title": "'He defended our honour': Ukraine reacts to Zelenskyy's clash with ...",
+      "source": "The Guardian",
+      "date": "March 1, 2025",
+      "url": "https://www.theguardian.com/world/2025/mar/01/ukraine-reacts-zelenskyy-clash-trump",
+      "snippet": "Back home there was widespread support for Ukraine's president, but also dismay at his car-crash encounter in the Oval Office."
+    },
+    {
+      "title": 'European leaders rally behind Zelensky after Trump clash - BBC',
+      "source": "BBC News",
+      "date": "March 1, 2025",
+      "url": "https://www.bbc.com/news/articles/cz9n5jq42pdo",
+      "snippet": "Volodymyr Zelensky sits in the Oval Office with Donald Trump - the two are engaged in. Call to scrap Trump's state visit over Zelensky row. An ..."
+    }
+  ]
+}
