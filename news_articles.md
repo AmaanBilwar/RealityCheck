@@ -1,0 +1,1 @@
+The Trump-Zelenskyy Oval Office meeting ended in a shouting match, with President Donald Trump and Vice President JD Vance berating Ukrainian President Volodymyr Zelenskyy over Kyiv's war efforts.
