@@ -193,7 +193,7 @@ news_links_crew = Crew(
 )
 
 # Execute with user-provided topic
-search_topic = "Trump and Zelensky clash in the Oval Office"
+search_topic = "PLACEHOLDER_TOPIC"  # Placeholder for user input
 
 try:
     result_output = news_links_crew.kickoff(inputs={'topic': search_topic})

@@ -82,10 +82,10 @@ export default function Home() {
                 </div>
 
                 {/* Chat Section - Fixed height at bottom */}
-                <div className="bg-card rounded-xl shadow-md border border-border/50 p-6 shrink-0">
+                {/* <div className="bg-card rounded-xl shadow-md border border-border/50 p-6 shrink-0">
                   <h3 className="text-lg font-semibold mb-4">Ask Questions</h3>
                   <ChatInput />
-                </div>
+                </div> */}
               </div>
             </main>
 

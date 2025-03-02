@@ -38,118 +38,6 @@ class NewsOutputSchema(BaseModel):
     timestamp: str
     articles: list[NewsArticleSchema]
 
-# ====== SENTIMENT ANALYSIS FUNCTIONS ======
-
-# def analyze_article_with_bedrock(article_text):
-#     # Initialize the Bedrock client
-#     bedrock_client = boto3.client("bedrock-runtime")
-    
-#     prompt = f'''
-#     Please analyze the following news article and determine if it's likely fake news or authentic.
-#     Rate it on a scale from 0 to 1, where 0 means completely fake and 1 means completely authentic.
-    
-#     Article: {article_text}
-    
-#     Provide your analysis in this JSON format:
-#     {{
-#         "score": [score between 0 and 1],
-#         "reasoning": [brief explanation of your rating]
-#     }}
-#     '''
-    
-#     try: 
-#         response = bedrock_client.invoke_model(
-#             modelId="us.meta.llama3-2-3b-instruct-v1:0",
-#             body=json.dumps({
-#                 "prompt": prompt,
-#                 "max_gen_len": 512,
-#                 "temperature": 0.1
-#             })
-#         )
-        
-#         # Parse the response
-#         response_body = json.loads(response.get('body').read().decode('utf-8'))
-#         result = response_body.get('generation')
-        
-#         # Extract the JSON part from the response
-#         try:
-#             # Try to find and extract JSON from the text response
-#             import re
-#             json_match = re.search(r'{.*}', result, re.DOTALL)
-#             if json_match:
-#                 result_json = json.loads(json_match.group(0))
-#                 return result_json
-#             else:
-#                 print("Warning: Could not extract JSON from LLM response.")
-#                 return {"score": 0.5, "reasoning": "Could not analyze properly"}
-#         except Exception as e:
-#             print(f"Error parsing response: {str(e)}")
-#             return {"score": 0.5, "reasoning": "Error in analysis parsing"}
-            
-#     except Exception as e:
-#         print(f"Error calling Bedrock: {str(e)}")
-#         return {"score": 0.5, "reasoning": "Error in analysis"}
-
-
-# def analyze_article_with_pipeline(article_text):
-#     """
-#     Analyze an article using a Hugging Face pipeline to determine if it's fake news.
-#     Returns a standardized format with score and reasoning.
-#     """
-#     try:
-#         # Use a pipeline as a high-level helper
-#         pipe = pipeline("text-classification", model="dhruvpal/fake-news-bert")
-        
-#         # Check if article is too long for the model
-#         max_length = 1600  # Most BERT models have this limit
-#         if len(article_text.split()) > max_length:
-#             # If too long, use only the first part of the article
-#             words = article_text.split()
-#             truncated_text = " ".join(words[:max_length])
-#             print(f"Article truncated from {len(words)} to {max_length} words for BERT analysis")
-#             raw_result = pipe(truncated_text)
-#         else:
-#             raw_result = pipe(article_text)
-        
-#         print(f"Raw pipeline result: {raw_result}")
-        
-#         # Process the result - extract label and score
-#         if isinstance(raw_result, list) and len(raw_result) > 0:
-#             result = raw_result[0]
-#             label = result.get('label', '').upper()
-#             confidence = result.get('score', 0.5)
-            
-#             # Convert to standardized output format
-#             # Assuming the model uses labels like "REAL"/"FAKE" or "AUTHENTIC"/"FAKE"
-#             if "REAL" in label or "AUTHENTIC" in label or "TRUE" in label:
-#                 return {
-#                     "score": confidence,
-#                     "reasoning": f"Article appears authentic with {confidence:.2f} confidence"
-#                 }
-#             elif "FAKE" in label or "FALSE" in label:
-#                 return {
-#                     "score": 1.0 - confidence,
-#                     "reasoning": f"Article appears to be fake news with {confidence:.2f} confidence"
-#                 }
-#             else:
-#                 # Handle other labels
-#                 return {
-#                     "score": 0.5,
-#                     "reasoning": f"Unclear classification: {label} with {confidence:.2f} confidence"
-#                 }
-#         else:
-#             return {
-#                 "score": 0.5,
-#                 "reasoning": "Could not classify article"
-#             }
-#     except Exception as e:
-#         print(f"Error in BERT pipeline: {str(e)}")
-#         return {
-#             "score": 0.5,
-#             "reasoning": f"Error in BERT analysis: {str(e)}"
-#         }
-
-# Extract chunks function using Ollama
 PROMPT = "Analyze the given article and extract complete, self-contained sentences or chunks that make factual claims, assertions, or statements requiring verification. Ensure that each extracted chunk has enough context to be meaningfully checked against external sources. Do not provide any explanations or summaries—only return the extracted statements that require fact-checking."
 
 def call_ollama(prompt: str, model: str = "llama3.2:latest") -> str:
@@ -601,18 +489,39 @@ def upload_to_s3(data, bucket_name, file_key, region_name=None):
 
 def main(article_text, upload_to_s3_bucket=None, s3_region=None):
     """
-    Main function for fact checking with added S3 upload functionality.
+    Main function for fact checking with streaming output.
     
     Parameters:
     article_text (str): The article text to fact check
     upload_to_s3_bucket (str, optional): S3 bucket name to upload results
     s3_region (str, optional): AWS region for S3 bucket
     
+    Yields:
+    dict: Progressive updates with processing status and data
+    
     Returns:
-    tuple: (fact_check_data, summary, embeddings)
+    tuple: (fact_check_data, summary, embeddings) when complete
     """
+    # Create a unique ID for this analysis (timestamp + hash of article)
+    import hashlib
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    article_hash = hashlib.md5(article_text[:100].encode()).hexdigest()[:10]
+    analysis_id = f"{timestamp}_{article_hash}"
+    
+    # Initialize the result structure
+    result_data = {
+        "analysis_id": analysis_id,
+        "article": article_text,
+        "verification_date": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "status": "processing",
+        "fact_checks": []
+    }
+    
+    # First progress update
+    yield {"status": "starting", "message": "Starting fact check process", "analysis_id": analysis_id}
+    
     # Add sentiment analysis for the original article using BERT pipeline
-    print("Analyzing article sentiment with BERT pipeline...")
+    yield {"status": "processing", "message": "Analyzing article sentiment...", "analysis_id": analysis_id}
     try:
         from transformers import pipeline
         import re
@@ -622,7 +531,6 @@ def main(article_text, upload_to_s3_bucket=None, s3_region=None):
         
         # If text is too long, truncate it
         if len(tokenized_text) > 450:  # Using 450 for safety margin
-            print(f"Text too long for BERT model ({len(tokenized_text)} tokens). Truncating to 450 tokens.")
             truncated_text = ' '.join(tokenized_text[:450])
             pipe = pipeline("text-classification", model="dhruvpal/fake-news-bert")
             result = pipe(truncated_text)
@@ -634,44 +542,57 @@ def main(article_text, upload_to_s3_bucket=None, s3_region=None):
             "score": result[0]["score"],
             "reasoning": result[0]["label"]
         }
-        print(f"Sentiment analysis result: {sentiment_result}")
+        result_data["sentiment_analysis"] = sentiment_result
+        yield {
+            "status": "processing", 
+            "message": f"Sentiment analysis complete: {result[0]['label']} ({result[0]['score']:.2f})", 
+            "data": {"sentiment": sentiment_result},
+            "analysis_id": analysis_id
+        }
         
     except Exception as e:
-        print(f"Error analyzing sentiment with BERT pipeline: {str(e)}")
         sentiment_result = {
             "score": 0.5,
             "reasoning": f"Failed to analyze sentiment: {str(e)}"
         }
+        result_data["sentiment_analysis"] = sentiment_result
+        yield {
+            "status": "warning", 
+            "message": f"Error analyzing sentiment: {str(e)}", 
+            "analysis_id": analysis_id
+        }
     
     # Step 1: Extract chunks from the article
-    print("Extracting chunks from article...")
+    yield {"status": "processing", "message": "Extracting statements to verify...", "analysis_id": analysis_id}
     chunks = extract_chunks(article_text)
-    print(f"Found {len(chunks)} chunks to verify")
-    
-    # Create a unique ID for this analysis (timestamp + hash of article)
-    import hashlib
-    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    article_hash = hashlib.md5(article_text[:100].encode()).hexdigest()[:10]
-    analysis_id = f"{timestamp}_{article_hash}"
-    
-    # Prepare the result structure with sentiment analysis added
-    result_data = {
-        "analysis_id": analysis_id,
-        "article": article_text,
-        "verification_date": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "sentiment_analysis": sentiment_result,
-        "fact_checks": []
+    yield {
+        "status": "processing", 
+        "message": f"Found {len(chunks)} statements to verify", 
+        "data": {"chunks_count": len(chunks)},
+        "analysis_id": analysis_id
     }
     
     # Step 2: For each chunk, search for news and add to results
     for i, chunk in enumerate(chunks):
-        print(f"\nProcessing chunk {i+1}/{len(chunks)}: {chunk[:50]}...")
+        yield {
+            "status": "processing", 
+            "message": f"Verifying statement {i+1}/{len(chunks)}: {chunk[:50]}...", 
+            "data": {"current_chunk": i+1, "total_chunks": len(chunks), "chunk_text": chunk[:50]},
+            "analysis_id": analysis_id
+        }
         
         # Search for news about this chunk
         search_result = search_for_topic(chunk)
         
         # Add articles with content
         if search_result and "articles" in search_result:
+            yield {
+                "status": "processing", 
+                "message": f"Found {len(search_result['articles'])} articles for statement {i+1}", 
+                "data": {"articles_found": len(search_result['articles'])},
+                "analysis_id": analysis_id
+            }
+            
             # Only fetch content for the first 3 articles to keep things manageable
             limited_articles = search_result["articles"][:3]
             articles_with_content = scrape_articles_parallel(limited_articles, max_workers=3)
@@ -684,62 +605,96 @@ def main(article_text, upload_to_s3_bucket=None, s3_region=None):
             }
             
             result_data["fact_checks"].append(fact_check_entry)
+            
+            # Send update with the latest chunk's verification data
+            yield {
+                "status": "processing", 
+                "message": f"Completed verification of statement {i+1}/{len(chunks)}", 
+                "data": {"fact_check": fact_check_entry},
+                "analysis_id": analysis_id
+            }
         else:
             # Handle case where no articles were found
-            result_data["fact_checks"].append({
+            fact_check_entry = {
                 "statement": chunk,
                 "search_topic": chunk,
                 "articles": [],
                 "error": "No articles found for this statement"
-            })
+            }
+            result_data["fact_checks"].append(fact_check_entry)
+            
+            yield {
+                "status": "processing", 
+                "message": f"No articles found for statement {i+1}/{len(chunks)}", 
+                "data": {"fact_check": fact_check_entry},
+                "analysis_id": analysis_id
+            }
     
-    # Generate and display the summary
+    # Generate summary
+    yield {"status": "processing", "message": "Generating article summary...", "analysis_id": analysis_id}
+    
     if not os.getenv('GEMINI_API_KEY'):
-        print("No GEMINI_API_KEY found in environment variables.")
+        yield {"status": "warning", "message": "No GEMINI_API_KEY found in environment", "analysis_id": analysis_id}
         api_key = input("Enter your Gemini API key (or press Enter to skip summarization): ")
         if not api_key:
-            print("No API key provided. Skipping summarization.")
+            yield {"status": "warning", "message": "Summarization skipped - no API key", "analysis_id": analysis_id}
             summary = "Summarization skipped due to missing API key."
-            # Return results without summary and embeddings
+            result_data["summary"] = summary
+            
+            # Save partial results without embeddings
+            filename = save_results_to_file(result_data)
+            yield {
+                "status": "completed", 
+                "message": f"Fact checking complete without summary. Results saved to {filename}", 
+                "data": {"filename": filename, "result_data": result_data},
+                "analysis_id": analysis_id
+            }
             return result_data, summary, None
     else:
         api_key = os.getenv('GEMINI_API_KEY')
     
     # Generate summary using the article text
     summary = summarization(article_text, api_key)
-    print("\n=== ARTICLE SUMMARY ===")
-    print(summary)
+    result_data["summary"] = summary
+    
+    yield {
+        "status": "processing", 
+        "message": "Summary generation complete", 
+        "data": {"summary": summary},
+        "analysis_id": analysis_id
+    }
     
     # Generate embeddings for the summary
-    print("\nGenerating embeddings for the summary...")
-    # Try with Bedrock first, with fallbacks to other methods
+    yield {"status": "processing", "message": "Generating embeddings for the summary...", "analysis_id": analysis_id}
     embeddings = generate_embeddings(summary, "bedrock")
-    
-    # Add summary and embeddings to the result data
-    result_data["summary"] = summary
     result_data["summary_embeddings"] = embeddings
     
-    # Step 3: Save results to local file
-    filename = "fact_check_results.json"
-    if filename=="fact_check_results.json":
-        # Check if the file already exists and update the filename if necessary
-        base_filename = "fact_check_results"
-        extension = ".json"
-        counter = 1
-        filename = f"{base_filename}{extension}"
-        
-        while os.path.exists(filename):
-            filename = f"{base_filename}_{counter}{extension}"
-            counter += 1
-            
-    with open(filename, "w") as f:
-        json.dump(result_data, f, indent=2)
+    if embeddings:
+        yield {
+            "status": "processing", 
+            "message": f"Generated embeddings (dimension: {len(embeddings)})", 
+            "data": {"embedding_dimension": len(embeddings)},
+            "analysis_id": analysis_id
+        }
+    else:
+        yield {"status": "warning", "message": "Could not generate embeddings", "analysis_id": analysis_id}
     
-    print(f"\nFact checking complete. Results saved to {filename}")
+    # Save results to file
+    filename = save_results_to_file(result_data)
+    yield {
+        "status": "processing", 
+        "message": f"Results saved to {filename}", 
+        "data": {"filename": filename},
+        "analysis_id": analysis_id
+    }
     
-    # Step 4: Upload to S3 if bucket name is provided
+    # Upload to S3 if bucket name is provided
     if upload_to_s3_bucket:
-        print(f"\nUploading results to S3 bucket: {upload_to_s3_bucket}")
+        yield {
+            "status": "processing", 
+            "message": f"Uploading results to S3 bucket: {upload_to_s3_bucket}", 
+            "analysis_id": analysis_id
+        }
         
         # Upload complete result data
         results_key = f"fact_checks/{analysis_id}/complete_results.json"
@@ -755,30 +710,57 @@ def main(article_text, upload_to_s3_bucket=None, s3_region=None):
                 "embeddings": embeddings
             }
             upload_success = upload_to_s3(embeddings_data, upload_to_s3_bucket, embeddings_key, s3_region)
+            
+        yield {
+            "status": "processing", 
+            "message": "S3 upload complete", 
+            "analysis_id": analysis_id
+        }
+    
+    # Final update
+    yield {
+        "status": "completed", 
+        "message": "Fact checking process complete", 
+        "data": {"result_data": result_data},
+        "analysis_id": analysis_id
+    }
     
     return result_data, summary, embeddings
 
-# Direct execution
-if __name__ == '__main__':
-    # Default article text for testing
-    prompt = input("Enter the article text to fact-check: ")
-    ARTICLE_TEXT = prompt
+# Helper function to save results to file with unique name
+def save_results_to_file(result_data):
+    """Save results to a JSON file with a unique filename"""
+    base_filename = "fact_check_results"
+    extension = ".json"
+    counter = 1
+    filename = f"{base_filename}{extension}"
     
-
-    s3_bucket = "embeddings-of-summaries-for-rag"
-    s3_region = "us-east-2"
+    while os.path.exists(filename):
+        filename = f"{base_filename}_{counter}{extension}"
+        counter += 1
         
-    # Run the fact checking and unpack the returned values
-    fact_check_data, summary, embeddings = main(ARTICLE_TEXT, s3_bucket, s3_region)
+    with open(filename, "w") as f:
+        json.dump(result_data, f, indent=2)
     
-    # Don't regenerate the summary - we already have it from the main function
-    print("\n=== ARTICLE SUMMARY ===")
-    print(summary)
-    
-    # Display information about the embeddings
-    if embeddings:
-        print(f"\n=== EMBEDDING INFORMATION ===")
-        print(f"Generated embeddings with dimension: {len(embeddings)}")
-        print(f"First 5 values: {embeddings[:5]}")
-    else:
-        print("\nNo embeddings were generated.")
+    return filename
+
+# Direct execution
+
+# Default article text for testing
+# prompt = input("Enter the article text to fact-check: ")
+# ARTICLE_TEXT = prompt
+
+
+
+
+# # Don't regenerate the summary - we already have it from the main function
+# print("\n=== ARTICLE SUMMARY ===")
+# print(summary)
+
+# # Display information about the embeddings
+# if embeddings:
+#     print(f"\n=== EMBEDDING INFORMATION ===")
+#     print(f"Generated embeddings with dimension: {len(embeddings)}")
+#     print(f"First 5 values: {embeddings[:5]}")
+# else:
+#     print("\nNo embeddings were generated.")
