@@ -558,8 +558,59 @@ def generate_embeddings(text, model_provider="bedrock"):
         return []
 
 
+def upload_to_s3(data, bucket_name, file_key, region_name=None):
+    """
+    Upload data to an S3 bucket.
+    
+    Parameters:
+    data (dict/list/str): The data to upload to S3
+    bucket_name (str): Name of the S3 bucket
+    file_key (str): The key (path) where the file will be stored in S3
+    region_name (str, optional): AWS region name
+    
+    Returns:
+    bool: True if upload successful, False otherwise
+    """
+    try:
+        # Create S3 client with region if specified
+        if region_name:
+            s3_client = boto3.client('s3', region_name=region_name)
+        else:
+            s3_client = boto3.client('s3')
+        
+        # Convert data to JSON if it's a dict or list
+        if isinstance(data, (dict, list)):
+            data_to_upload = json.dumps(data, default=str)
+        else:
+            data_to_upload = str(data)
+        
+        # Upload to S3
+        s3_client.put_object(
+            Bucket=bucket_name,
+            Key=file_key,
+            Body=data_to_upload,
+            ContentType='application/json'
+        )
+        
+        print(f"Successfully uploaded to s3://{bucket_name}/{file_key}")
+        return True
+        
+    except Exception as e:
+        print(f"Error uploading to S3: {str(e)}")
+        return False
 
-def main(article_text):
+def main(article_text, upload_to_s3_bucket=None, s3_region=None):
+    """
+    Main function for fact checking with added S3 upload functionality.
+    
+    Parameters:
+    article_text (str): The article text to fact check
+    upload_to_s3_bucket (str, optional): S3 bucket name to upload results
+    s3_region (str, optional): AWS region for S3 bucket
+    
+    Returns:
+    tuple: (fact_check_data, summary, embeddings)
+    """
     # Add sentiment analysis for the original article using BERT pipeline
     print("Analyzing article sentiment with BERT pipeline...")
     try:
@@ -597,11 +648,18 @@ def main(article_text):
     chunks = extract_chunks(article_text)
     print(f"Found {len(chunks)} chunks to verify")
     
+    # Create a unique ID for this analysis (timestamp + hash of article)
+    import hashlib
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    article_hash = hashlib.md5(article_text[:100].encode()).hexdigest()[:10]
+    analysis_id = f"{timestamp}_{article_hash}"
+    
     # Prepare the result structure with sentiment analysis added
     result_data = {
+        "analysis_id": analysis_id,
         "article": article_text,
         "verification_date": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "sentiment_analysis": sentiment_result,  # Add sentiment analysis results
+        "sentiment_analysis": sentiment_result,
         "fact_checks": []
     }
     
@@ -635,19 +693,6 @@ def main(article_text):
                 "error": "No articles found for this statement"
             })
     
-    # Step 3: Save results to file
-    filename = "fact_check_results.json"
-    if filename=="fact_check_results.json":
-        # Check if the file already exists and update the filename if necessary
-        base_filename = "fact_check_results"
-        extension = ".json"
-        counter = 1
-        filename = f"{base_filename}{extension}"
-        
-        while os.path.exists(filename):
-            filename = f"{base_filename}_{counter}{extension}"
-            counter += 1
-    
     # Generate and display the summary
     if not os.getenv('GEMINI_API_KEY'):
         print("No GEMINI_API_KEY found in environment variables.")
@@ -674,11 +719,43 @@ def main(article_text):
     result_data["summary"] = summary
     result_data["summary_embeddings"] = embeddings
     
-    # Save the updated results to file
+    # Step 3: Save results to local file
+    filename = "fact_check_results.json"
+    if filename=="fact_check_results.json":
+        # Check if the file already exists and update the filename if necessary
+        base_filename = "fact_check_results"
+        extension = ".json"
+        counter = 1
+        filename = f"{base_filename}{extension}"
+        
+        while os.path.exists(filename):
+            filename = f"{base_filename}_{counter}{extension}"
+            counter += 1
+            
     with open(filename, "w") as f:
         json.dump(result_data, f, indent=2)
     
     print(f"\nFact checking complete. Results saved to {filename}")
+    
+    # Step 4: Upload to S3 if bucket name is provided
+    if upload_to_s3_bucket:
+        print(f"\nUploading results to S3 bucket: {upload_to_s3_bucket}")
+        
+        # Upload complete result data
+        results_key = f"fact_checks/{analysis_id}/complete_results.json"
+        upload_success = upload_to_s3(result_data, upload_to_s3_bucket, results_key, s3_region)
+        
+        # Upload just the embeddings separately for easier access
+        if embeddings:
+            embeddings_key = f"embeddings/{analysis_id}.json"
+            embeddings_data = {
+                "analysis_id": analysis_id,
+                "verification_date": result_data["verification_date"],
+                "summary": summary,
+                "embeddings": embeddings
+            }
+            upload_success = upload_to_s3(embeddings_data, upload_to_s3_bucket, embeddings_key, s3_region)
+    
     return result_data, summary, embeddings
 
 # Direct execution
@@ -687,8 +764,12 @@ if __name__ == '__main__':
     prompt = input("Enter the article text to fact-check: ")
     ARTICLE_TEXT = prompt
     
+
+    s3_bucket = "embeddings-of-summaries-for-rag"
+    s3_region = "us-east-2"
+        
     # Run the fact checking and unpack the returned values
-    fact_check_data, summary, embeddings = main(ARTICLE_TEXT)
+    fact_check_data, summary, embeddings = main(ARTICLE_TEXT, s3_bucket, s3_region)
     
     # Don't regenerate the summary - we already have it from the main function
     print("\n=== ARTICLE SUMMARY ===")
@@ -701,4 +782,3 @@ if __name__ == '__main__':
         print(f"First 5 values: {embeddings[:5]}")
     else:
         print("\nNo embeddings were generated.")
-    
