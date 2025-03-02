@@ -39,7 +39,7 @@ export default function AppSidebar() {
         setIsLoading(true);
         setError(null);
         // Note: Use GET not POST for fetching topics
-        const response = await axios.get('http://3.16.135.202:8000/api/topics');
+        const response = await axios.get('http://127.0.0.1:8000/api/topics');
         if (response.data.topics) {
           setThreads(response.data.topics);
           console.log("Fetched topics:", response.data.topics);
