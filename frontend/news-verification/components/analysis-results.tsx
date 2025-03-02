@@ -18,10 +18,10 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface AnalysisResultsProps {
   data: {
-    highlights: Array<{ text: string; sentiment: string }>
-    overallSentiment: string
-    relatedSources: Array<{ title: string; url: string; reliability: string }>
-    factChecks: Array<{ claim: string; verdict: string; source: string }>
+    highlights?: Array<{ text: string; sentiment: string }>;
+    overallSentiment?: string;
+    relatedSources?: Array<{ title: string; url: string; reliability: string }>;
+    factChecks?: Array<{ claim: string; verdict: string; source: string }>;
   }
 }
 
@@ -114,62 +114,74 @@ export default function AnalysisResults({ data }: AnalysisResultsProps) {
             </TabsList>
 
             <TabsContent value="highlights" className="mt-4 space-y-4">
-              {data.highlights.map((highlight, index) => (
-                <div key={index} className="rounded-lg border p-4">
-                  <div className="flex items-start space-x-2">
-                    <div className="mt-1">{getSentimentIcon(highlight.sentiment)}</div>
-                    <div>
-                      <p className="text-sm font-medium">{highlight.text}</p>
-                      <div className="mt-2">{getSentimentBadge(highlight.sentiment)}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </TabsContent>
-
-            <TabsContent value="sources" className="mt-4 space-y-4">
-              {data.relatedSources.map((source, index) => (
-                <div key={index} className="rounded-lg border p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-medium">{source.title}</p>
-                      <div className="mt-2">{getReliabilityBadge(source.reliability)}</div>
-                    </div>
-                    <Button variant="ghost" size="icon" asChild>
-                      <a href={source.url} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-4 w-4" />
-                        <span className="sr-only">Open link</span>
-                      </a>
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </TabsContent>
-
-            <TabsContent value="factcheck" className="mt-4 space-y-4">
-              {data.factChecks.map((check, index) => (
-                <div key={index} className="rounded-lg border p-4">
-                  <div className="space-y-2">
+              {data.highlights && data.highlights.length > 0 ? (
+                data.highlights.map((highlight, index) => (
+                  <div key={index} className="rounded-lg border p-4">
                     <div className="flex items-start space-x-2">
-                      {check.verdict.includes("True") ? (
-                        <CheckCircle className="mt-0.5 h-4 w-4 text-green-500" />
-                      ) : check.verdict === "Disputed" ? (
-                        <AlertTriangle className="mt-0.5 h-4 w-4 text-yellow-500" />
-                      ) : (
-                        <Info className="mt-0.5 h-4 w-4 text-blue-500" />
-                      )}
+                      <div className="mt-1">{getSentimentIcon(highlight.sentiment)}</div>
                       <div>
-                        <p className="font-medium">Claim: {check.claim}</p>
-                        <div className="mt-1 flex items-center space-x-2">
-                          <span className="text-sm text-muted-foreground">Verdict:</span>
-                          {getVerdictBadge(check.verdict)}
-                        </div>
-                        <p className="mt-1 text-sm text-muted-foreground">Source: {check.source}</p>
+                        <p className="text-sm font-medium">{highlight.text}</p>
+                        <div className="mt-2">{getSentimentBadge(highlight.sentiment)}</div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">No highlights available</div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="sources" className="mt-4 space-y-4">
+              {data.relatedSources && data.relatedSources.length > 0 ? (
+                data.relatedSources.map((source, index) => (
+                  <div key={index} className="rounded-lg border p-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium">{source.title}</p>
+                        <div className="mt-2">{getReliabilityBadge(source.reliability)}</div>
+                      </div>
+                      <Button variant="ghost" size="icon" asChild>
+                        <a href={source.url} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-4 w-4" />
+                          <span className="sr-only">Open link</span>
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">No related sources available</div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="factcheck" className="mt-4 space-y-4">
+              {data.factChecks && data.factChecks.length > 0 ? (
+                data.factChecks.map((check, index) => (
+                  <div key={index} className="rounded-lg border p-4">
+                    <div className="space-y-2">
+                      <div className="flex items-start space-x-2">
+                        {check.verdict.includes("True") ? (
+                          <CheckCircle className="mt-0.5 h-4 w-4 text-green-500" />
+                        ) : check.verdict === "Disputed" ? (
+                          <AlertTriangle className="mt-0.5 h-4 w-4 text-yellow-500" />
+                        ) : (
+                          <Info className="mt-0.5 h-4 w-4 text-blue-500" />
+                        )}
+                        <div>
+                          <p className="font-medium">Claim: {check.claim}</p>
+                          <div className="mt-1 flex items-center space-x-2">
+                            <span className="text-sm text-muted-foreground">Verdict:</span>
+                            {getVerdictBadge(check.verdict)}
+                          </div>
+                          <p className="mt-1 text-sm text-muted-foreground">Source: {check.source}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">No fact checks available</div>
+              )}
             </TabsContent>
           </Tabs>
         </CardContent>

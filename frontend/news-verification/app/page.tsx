@@ -1,3 +1,4 @@
+'use client'
 import { Suspense } from "react"
 import NewsAnalyzer from "@/components/news-analyzer"
 import { Skeleton } from "@/components/ui/skeleton"
