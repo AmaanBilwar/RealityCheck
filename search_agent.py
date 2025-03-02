@@ -1,12 +1,17 @@
 from crewai import Agent, Task, LLM, Crew, Process
-from crewai_tools import SerperDevTool
+from crewai_tools import SerperDevTool, ScrapeWebsiteTool
 from dotenv import load_dotenv
 import os
 import json
 import re
 import datetime
 from pydantic import BaseModel
+import concurrent.futures
+import time
+
 load_dotenv()
+serper_key = os.getenv("SERPER_DEV_KEY")
+os.environ["SERPER_API_KEY"] = serper_key  # Ensure it's available globally
 
 # Pydantic Baseclass for JSON Schema
 class NewsArticleSchema(BaseModel):
@@ -21,9 +26,64 @@ class NewsOutputSchema(BaseModel):
     timestamp: str
     articles: list[NewsArticleSchema]
 
+def scrape_article_content(url, attempt=1, max_attempts=3):
+    """Scrape content from a URL with retry mechanism"""
+    if not url or url == "None":
+        return "No valid URL provided for scraping."
+        
+    try:
+        print(f"Attempting to scrape: {url}")
+        scraping_tool = ScrapeWebsiteTool(website_url=url)
+        # Explicitly pass the URL to the tool
+        result = scraping_tool.run()
+        
+        # If result is extremely short, it might be a failed scrape
+        if len(result) < 100 and attempt < max_attempts:
+            print(f"Short result from {url}, retrying ({attempt}/{max_attempts})")
+            time.sleep(2)  # Wait before retry
+            return scrape_article_content(url, attempt + 1, max_attempts)
+        return result
+    except Exception as e:
+        if attempt < max_attempts:
+            print(f"Error scraping {url}, retrying ({attempt}/{max_attempts}): {e}")
+            time.sleep(2)  # Wait before retry
+            return scrape_article_content(url, attempt + 1, max_attempts)
+        print(f"Failed to scrape {url} after {max_attempts} attempts: {e}")
+        return f"Failed to scrape content: {str(e)}"
 
-serper_key = os.getenv("SERPER_DEV_KEY")
-os.environ["SERPER_API_KEY"] = serper_key  # Ensure it's available globally
+# Function to scrape articles in parallel
+def scrape_articles_parallel(articles, max_workers=5):
+    """Scrape multiple articles in parallel"""
+    updated_articles = []
+    print(f"Scraping {len(articles)} articles with {max_workers} workers...")
+    print(articles)
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Prepare the futures
+        future_to_article = {
+            executor.submit(scrape_article_content, article["url"]): article 
+            for article in articles
+        }
+        
+        # Process as they complete
+        for future in concurrent.futures.as_completed(future_to_article):
+            article = future_to_article[future]
+            try:
+                content = future.result()
+                # Create a new article with content
+                article_with_content = article.copy()
+                article_with_content["content"] = content
+                updated_articles.append(article_with_content)
+                print(f"Successfully scraped content for: {article['title'][:30]}...")
+            except Exception as e:
+                print(f"Exception scraping {article['url']}: {e}")
+                # Keep the article but mark content as failed
+                article_with_content = article.copy()
+                article_with_content["content"] = "Failed to scrape content."
+                updated_articles.append(article_with_content)
+    
+    return updated_articles
+
 
 # Initialize LLM with strict temperature
 llm = LLM(model="ollama/llama3.2", base_url="http://localhost:11434", temperature=0.0)
@@ -81,7 +141,7 @@ news_link_retriever = Agent(
         "You only return data in the exact JSON format specified."
     ),
     tools=[news_search_tool],
-    verbose=True,
+    verbose=False,
     memory=False,
     max_iter=3,
     llm=llm
@@ -129,7 +189,7 @@ news_links_crew = Crew(
     agents=[news_link_retriever],
     tasks=[link_retrieval_task],
     process=Process.sequential,
-    verbose=True
+    verbose=False
 )
 
 # Execute with user-provided topic
@@ -176,6 +236,7 @@ try:
         parsed_json = get_raw_news_results(search_topic, serper_key)
         
     # Output the result
+    parsed_json['articles'] = scrape_articles_parallel(parsed_json['articles'])
     result_json = json.dumps(parsed_json, indent=2)
     print("\nJSON Results:")
     print(result_json)
