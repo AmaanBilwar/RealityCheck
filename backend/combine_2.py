@@ -12,7 +12,7 @@ import time
 import concurrent.futures
 import boto3
 from transformers import pipeline
-import google.generativeai as genai
+from google import genai
 import os
 load_dotenv()
 
