@@ -709,25 +709,14 @@ def main(article_text, upload_to_s3_bucket=None, s3_region=None):
     summary = summarization(article_text, api_key)
     print("\n=== ARTICLE SUMMARY ===")
     print(summary)
-
-    # Ensure the summary is a string and not empty
-    if not summary or not isinstance(summary, str):
-        print("Warning: Empty or invalid summary generated")
-        summary = "No valid summary was generated."
-
+    
     # Generate embeddings for the summary
     print("\nGenerating embeddings for the summary...")
     # Try with Bedrock first, with fallbacks to other methods
     embeddings = generate_embeddings(summary, "bedrock")
-
-    # Add summary and embeddings to the result data with more structure
+    
+    # Add summary and embeddings to the result data
     result_data["summary"] = summary
-    result_data["article_analysis"] = {
-        "summary": summary,
-        "summary_length": len(summary.split()),
-        "generated_at": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "model_used": "gemini-2.0-flash"
-    }
     result_data["summary_embeddings"] = embeddings
     
     # Step 3: Save results to local file

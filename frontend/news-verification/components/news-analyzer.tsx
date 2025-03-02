@@ -71,7 +71,7 @@ export default function NewsAnalyzer() {
     try {
       if (inputType === "url") {
         // For URLs, use the traditional endpoint
-        const response = await axios.post('http://localhost:8000/api/analyze_url', { url: inputValue })
+        const response = await axios.post('http://127.0.0.1:8000/api/analyze_url', { url: inputValue })
         
         if (response.status !== 200) {
           throw new Error(`Server returned ${response.status}: ${response.statusText}`)
@@ -87,7 +87,7 @@ export default function NewsAnalyzer() {
         // Create the event source using the ReadableStream approach to handle POST
         try {
           // First, make the POST request
-          const response = await fetch('http://localhost:8000/api/factcheck/stream', {
+          const response = await fetch('http://127.0.0.1:8000/api/factcheck/stream', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'

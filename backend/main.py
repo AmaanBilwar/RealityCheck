@@ -38,7 +38,7 @@ gemini_model = None
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"],
+    allow_origins=["http://18.119.102.201","http://18.119.102.201:3000", "http://18.119.102.201:3001", "http://18.119.102.201:3000"],
     allow_methods=["*"],
     allow_headers=["*"]
 )
