@@ -36,7 +36,7 @@ export default function Home() {
                 <div className="flex items-center gap-4">
                   <div className="hidden sm:block">
                     <span className="text-sm text-muted-foreground/90 font-medium px-3 py-1 bg-muted/50 rounded-full">
-                      Powered by xAI
+                      Powered by Students at UC
                     </span>
                   </div>
                   <ModeToggle />
