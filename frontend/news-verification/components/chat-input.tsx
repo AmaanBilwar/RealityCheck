@@ -19,21 +19,34 @@ export default function ChatInput() {
     setMessage("")
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
+  }
+
   return (
-    <Card className="border-t-0 rounded-t-none">
+    <Card className="border-t-0 rounded-t-none shadow-lg">
       <CardContent className="p-4">
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-3">
           <div className="relative flex-1">
             <Textarea
               placeholder="Ask a question about this article..."
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              className="min-h-[60px] pr-10 resize-none"
+              onKeyDown={handleKeyDown}
+              className="min-h-[60px] pr-12 resize-none border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md transition-all duration-200"
             />
-            <MessageSquare className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
+            <MessageSquare className="absolute right-4 top-4 h-5 w-5 text-gray-500" />
           </div>
-          <Button onClick={handleSendMessage} disabled={!message.trim()} size="icon" className="h-10 w-10">
-            <Send className="h-4 w-4" />
+          <Button
+            onClick={handleSendMessage}
+            disabled={!message.trim()}
+            size="icon"
+            className="h-12 w-12 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 transition-colors duration-200 flex items-center justify-center rounded-full"
+          >
+            <Send className="h-5 w-5 text-white" />
             <span className="sr-only">Send message</span>
           </Button>
         </div>
@@ -41,4 +54,3 @@ export default function ChatInput() {
     </Card>
   )
 }
-
