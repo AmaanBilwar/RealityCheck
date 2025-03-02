@@ -1,48 +1,52 @@
-import boto3
-import json
-import sys 
-from transformers import pipeline
+from google import genai
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
-def summarize_article_with_bedrock(article_content):
-    # Initialize the Bedrock client
-    bedrock_client = boto3.client("bedrock-runtime")
+def summarization(text, api_key=None):
+    # Use provided API key or check environment variable
+    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
     
-    prompt = f'''
-    Please analyze the following news article and generate a summary that is brief and easy to understand for the user.
-
-    Article: {article_content}
-    '''
+    # Check if we have a valid API key
+    if not GEMINI_API_KEY:
+        print("API key not found. Please provide a valid Gemini API key.")
+        return "API key not found"
     
-    try: 
-        response = bedrock_client.invoke_model(
-            modelId="us.meta.llama3-2-3b-instruct-v1:0",
-            body=json.dumps({
-                "prompt": prompt,
-                "max_gen_len": 512,
-                "temperature": 0.1
-            })
+    try:
+        # Initialize the client
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        # Generate the summary
+        response = client.models.generate_content(
+            model='gemini-2.0-flash', 
+            contents=f'Summarize the following article:\n\n{text}'
         )
-        
-        # Parse the response
-        response_body = json.loads(response.get('body').read().decode('utf-8'))
-        result = response_body.get('generation')
-        
-        # Extract the JSON part from the response
-        try:
-            # Try to find and extract JSON from the text response
-            import re
-            json_match = re.search(r'{.*}', result, re.DOTALL)
-            if json_match:
-                result_json = json.loads(json_match.group(0))
-                return result_json
-            else:
-                print("Warning: Could not extract JSON from LLM response.")
-                return {"score": 0.5, "reasoning": "Could not analyze properly"}
-        except Exception as e:
-            print(f"Error parsing response: {str(e)}")
-            return {"score": 0.5, "reasoning": "Error in analysis parsing"}
-            
+        return response.text
+    except ValueError as e:
+        print(f"API Client Error: {e}")
+        return "Error: Could not initialize Gemini client. Check your API key."
     except Exception as e:
-        print(f"Error calling Bedrock: {str(e)}")
-        return {"score": 0.5, "reasoning": "Error in analysis"}
+        print(f"Error generating summary: {str(e)}")
+        return f"Error: {str(e)}"
+
+def main():
+    # Check if API key is in environment
+    if not os.getenv('GEMINI_API_KEY'):
+        print("No GEMINI_API_KEY found in environment variables.")
+        api_key = input("Enter your Gemini API key (or press Enter to exit): ")
+        if not api_key:
+            print("No API key provided. Exiting.")
+            return
+    else:
+        api_key = os.getenv('GEMINI_API_KEY')
+        
+    # Get the text to summarize
+    text = input("Enter the text to summarize: ")
+    
+    # Generate and display the summary
+    summary = summarization(text, api_key)
+    print("\nSummary:", summary)
+
+
+if __name__ == '__main__':
+    main()
