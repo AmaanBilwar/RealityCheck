@@ -400,6 +400,8 @@ def search_for_topic(topic):
         print(f"Error searching for '{topic}': {str(e)}")
         # Fall back to direct API call
         return get_raw_news_results(topic, serper_key)
+    
+
 def main(article_text):
     # Add sentiment analysis for the original article using BERT pipeline
     print("Analyzing article sentiment with BERT pipeline...")
