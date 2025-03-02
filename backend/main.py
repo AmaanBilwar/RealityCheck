@@ -37,7 +37,7 @@ class ArticleRequest(BaseModel):
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://18.119.102.201:3000", "http://18.119.102.201:3001", "http://18.119.102.201:3000"],
+    allow_origins=["http://18.119.102.201","http://18.119.102.201:3000", "http://18.119.102.201:3001", "http://18.119.102.201:3000"],
     allow_methods=["*"],
     allow_headers=["*"]
 )
@@ -51,11 +51,11 @@ class NewsInput(BaseModel):
     upload_to_s3: bool = False
     save_to_db: bool = True
     
-@app.get("http://18.119.102.201/api/data")
+@app.get("/api/data")
 def simple_endpoint():
     return {"message": "Hello from FastAPI!"}
 
-@app.post("http://18.119.102.201/api/factcheck/stream")
+@app.post("/api/factcheck/stream")
 async def factcheck_stream(request: ArticleRequest):
     """Process fact checking with streaming updates and store final result"""
     
@@ -117,7 +117,7 @@ async def factcheck_stream(request: ArticleRequest):
         media_type="text/event-stream"
     )
 
-@app.post("http://18.119.102.201/api/factcheck")
+@app.post("/api/factcheck")
 async def factcheck(request: ArticleRequest, background_tasks: BackgroundTasks):
     """Non-streaming version that returns immediately and processes in background"""
 
@@ -144,7 +144,7 @@ async def factcheck(request: ArticleRequest, background_tasks: BackgroundTasks):
     })
 
 # POST endpoint to receive news input data
-@app.post("http://18.119.102.201/api/news_input")
+@app.post("/api/news_input")
 async def process_news_input(news_data: NewsInput):
     """
     Process text input for fact checking with integrated streaming and final response
@@ -163,7 +163,7 @@ async def process_news_input(news_data: NewsInput):
     # Reuse the streaming endpoint logic
     return await factcheck_stream(article_request)
 
-@app.get("http://18.119.102.201/api/topics")
+@app.get("/api/topics")
 def get_topics(db_name='newsdb', collection_name="articles"):
     load_dotenv()
     mongo_uri = os.getenv("MONGO_DB")
