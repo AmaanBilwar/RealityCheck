@@ -163,33 +163,6 @@ async def process_news_input(news_data: NewsInput):
     # Reuse the streaming endpoint logic
     return await factcheck_stream(article_request)
 
-@app.post("/query", response_model=QueryResponse)
-async def query(request: QueryRequest):
-    if model is None or index is None:
-        raise HTTPException(status_code=500, detail="RAG service not initialized properly")
-    
-    # Encode the query
-    query_embedding = model.encode([request.query])[0].reshape(1, -1).astype(np.float32)
-    
-    # Search for similar vectors
-    distances, indices = index.search(query_embedding, request.top_k)
-    
-    # Prepare results
-    results = []
-    for i, doc_idx in enumerate(indices[0]):
-        if doc_idx < len(documents):
-            doc = documents[str(doc_idx)]
-            results.append(
-                Document(
-                    id=str(doc_idx),
-                    content=doc["content"],
-                    metadata=doc.get("metadata", {}),
-                    score=float(1.0 - distances[0][i]/100.0)  # Convert distance to similarity score
-                )
-            )
-    
-    return QueryResponse(results=results, query=request.query)
-
 @app.get("/api/topics")
 def get_topics(db_name='newsdb', collection_name="articles"):
     load_dotenv()
