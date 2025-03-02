@@ -1,5 +1,7 @@
-from crewai import Agent, Task, LLM, Crew, Process
+
 from crewai_tools import SerperDevTool, ScrapeWebsiteTool
+from crewai import Agent, Task, LLM, Crew, Process
+
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import json
@@ -10,7 +12,7 @@ import time
 import concurrent.futures
 import boto3
 from transformers import pipeline
-from google import genai
+import google.generativeai as genai
 import os
 load_dotenv()
 
@@ -172,7 +174,7 @@ def search_for_topic(topic):
     """Function to search for a single topic and return results"""
     try:
         # Initialize LLM with strict temperature
-        llm = LLM(model="ollama/llama3.2", base_url="http://localhost:11434", temperature=0.0)
+        llm = LLM(model="ollama/llama3.2", base_url="http://localhost:11434", temperature=0.1)
         
         # Define Serper news search tool
         news_search_tool = SerperDevTool(
@@ -635,7 +637,6 @@ def main(article_text, upload_to_s3_bucket=None, s3_region=None):
     
     if not os.getenv('GEMINI_API_KEY'):
         yield {"status": "warning", "message": "No GEMINI_API_KEY found in environment", "analysis_id": analysis_id}
-        api_key = input("Enter your Gemini API key (or press Enter to skip summarization): ")
         if not api_key:
             yield {"status": "warning", "message": "Summarization skipped - no API key", "analysis_id": analysis_id}
             summary = "Summarization skipped due to missing API key."

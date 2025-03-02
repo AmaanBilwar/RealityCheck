@@ -50,23 +50,23 @@ export default function NewsAnalyzer() {
     }
   }, [inputValue, inputType])
 
-  const handleAnalyze = async () => {
+    const handleAnalyze = async () => {
     setErrorMessage(null)
     setStreamingUpdates([])
     setProgress(0)
     setCurrentStep("")
     
     if (!inputValue.trim()) return
-
+  
     // Double-check URL validity if needed
     if (inputType === "url" && !isValidUrl(inputValue)) {
       setUrlError(true)
       return
     }
-
+  
     setIsAnalyzing(true)
     setAnalysisComplete(false)
-
+  
     try {
       if (inputType === "url") {
         // For URLs, use the traditional endpoint
@@ -75,59 +75,111 @@ export default function NewsAnalyzer() {
         if (response.status !== 200) {
           throw new Error(`Server returned ${response.status}: ${response.statusText}`)
         }
-
+  
         const data = response.data
         console.log(`Analysis results for ${inputType}:`, data.analysis)
         setAnalysisData(data.analysis)
         setAnalysisComplete(true)
       } else {
-        // For text content, use the streaming endpoint
-        const eventSource = new EventSource(`http://localhost:8000/api/factcheck/stream?article=${encodeURIComponent(inputValue)}`);
+        // For text content, use the POST request for streaming endpoint
         
-        eventSource.onmessage = (event) => {
-          try {
-            const update = JSON.parse(event.data) as UpdateMessage;
-            console.log("Received update:", update);
-            
-            // Add to streaming updates
-            setStreamingUpdates(prev => [...prev, update]);
-            setCurrentStep(update.message);
-            
-            // Update progress based on updates
-            if (update.status === 'processing') {
-              if (update.data?.current_chunk && update.data?.total_chunks) {
-                // If we have chunk information, use it for progress
-                const percent = Math.round((update.data.current_chunk / update.data.total_chunks) * 80) + 10;
-                setProgress(percent); // Start at 10%, max at 90%
-              } else {
-                // Otherwise increment progress by small steps
-                setProgress(prev => Math.min(prev + 3, 90));
-              }
-            } else if (update.status === 'starting') {
-              setProgress(5);
-            }
-            
-            // Handle completion
-            if (update.status === 'completed' && update.data?.result_data) {
-              setAnalysisData(update.data.result_data);
-              setAnalysisComplete(true);
-              setProgress(100);
-              eventSource.close();
-            } else if (update.status === 'done') {
-              setProgress(100);
-              eventSource.close();
-            }
-          } catch (error) {
-            console.error("Error parsing event data:", error);
+        // Create the event source using the ReadableStream approach to handle POST
+        try {
+          // First, make the POST request
+          const response = await fetch('http://localhost:8000/api/factcheck/stream', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+              article: inputValue,
+              upload_to_s3: false,
+              save_to_db: true
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
           }
-        };
-        
-        eventSource.onerror = (error) => {
-          console.error("EventSource error:", error);
-          setErrorMessage("Connection to the analysis stream failed.");
-          eventSource.close();
+          
+          // Get the response body as a ReadableStream
+          const reader = response.body?.getReader();
+          if (!reader) {
+            throw new Error("Failed to get stream reader from response");
+          }
+          
+          // Set up decoder and buffer for processing chunks of text
+          const decoder = new TextDecoder();
+          let buffer = '';
+          
+          // Process the stream
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              break;
+            }
+            
+            // Decode the chunk and add to buffer
+            buffer += decoder.decode(value, { stream: true });
+            
+            // Process complete SSE messages from the buffer
+            const lines = buffer.split('\n\n');
+            // Keep incomplete line in buffer
+            buffer = lines.pop() || '';
+            
+            // Process each complete SSE message
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const update = JSON.parse(line.substring(6)) as UpdateMessage;
+                  console.log("Received update:", update);
+                  
+                  // Add to streaming updates
+                  setStreamingUpdates(prev => [...prev, update]);
+                  setCurrentStep(update.message);
+                  
+                  // Update progress based on updates
+                  if (update.status === 'processing') {
+                    if (update.data?.current_chunk && update.data?.total_chunks) {
+                      // If we have chunk information, use it for progress
+                      const percent = Math.round((update.data.current_chunk / update.data.total_chunks) * 80) + 10;
+                      setProgress(percent); // Start at 10%, max at 90%
+                    } else {
+                      // Otherwise increment progress by small steps
+                      setProgress(prev => Math.min(prev + 3, 90));
+                    }
+                  } else if (update.status === 'starting') {
+                    setProgress(5);
+                  }
+                  
+                  // Handle completion
+                  if (update.status === 'completed' && update.data?.result_data) {
+                    setAnalysisData(update.data.result_data);
+                    setAnalysisComplete(true);
+                    setProgress(100);
+                    reader.cancel(); // Close the stream
+                    break;
+                  } else if (update.status === 'done') {
+                    setProgress(100);
+                    reader.cancel(); // Close the stream
+                    break;
+                  }
+                } catch (error) {
+                  console.error("Error parsing event data:", error);
+                }
+              }
+            }
+          }
+        } catch (streamError) {
+          console.error("Stream error:", streamError);
+          if (streamError instanceof Error) {
+            setErrorMessage(`Stream error: ${streamError.message}`);
+          } else {
+            setErrorMessage("Stream error occurred");
+          }
           setIsAnalyzing(false);
-        };
+        }
       }
     } catch (error: any) {
       console.error("Analysis failed:", error)
@@ -135,7 +187,7 @@ export default function NewsAnalyzer() {
       setAnalysisData(null)
       setAnalysisComplete(false)
     } finally {
-      // For URL input or errors, we'll set isAnalyzing to false
+      // For URL input or non-streaming errors, we'll set isAnalyzing to false
       // For streaming text analysis, this happens when the stream completes
       if (inputType === "url") {
         setIsAnalyzing(false);

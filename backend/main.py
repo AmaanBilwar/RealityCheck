@@ -163,6 +163,62 @@ async def process_news_input(news_data: NewsInput):
     # Reuse the streaming endpoint logic
     return await factcheck_stream(article_request)
 
+@app.get("/api/topics")
+def get_topics(db_name='newsdb', collection_name="articles"):
+    load_dotenv()
+    mongo_uri = os.getenv("MONGO_DB")
+    if not mongo_uri:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "MongoDB connection string not found in environment variables"}
+        )
+    try:
+        client = MongoClient(mongo_uri)
+        # Verify connection
+        client.admin.command('ping')
+        
+        # Select database and collection
+        db = client[db_name]
+        articles = db[collection_name]
+        
+        # Get all documents with projection to include only _id and topic fields
+        # We'll limit results and sort by processed_date to get the most recent
+        pipeline = [
+            {"$sort": {"processed_date": -1}},
+            {"$project": {"_id": 1, "topic": 1, "processed_date": 1, "summary": 1, "analysis_id": 1}},
+            {"$limit": 100}  # Limit to most recent 100 entries
+        ]
+        topics_cursor = articles.aggregate(pipeline)
+        print(topics_cursor)
+        
+        # Convert ObjectId to string for JSON serialization
+        topics_list = []
+        for doc in topics_cursor:
+            doc["_id"] = str(doc["_id"])  # Convert ObjectId to string
+            topics_list.append(doc)
+            
+        print(f"Topics found: {len(topics_list)}")
+        return {
+            'topics': topics_list
+            }
+        
+    except ConnectionFailure as e:
+        print(f"MongoDB connection failed: {str(e)}")
+        return JSONResponse(
+            status_code=500, 
+            content={"error": f"Database connection failed: {str(e)}"}
+        )
+    except PyMongoError as e:
+        print(f"MongoDB operation error: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Database error: {str(e)}"}
+        )
+    finally:
+        # Ensure connection is closed properly
+        if 'client' in locals():
+            client.close()
+
 def save_to_database(data, db_name='newsdb', collection_name="articles"):
     """Save data to MongoDB and return the document ID"""
     load_dotenv()

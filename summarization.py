@@ -33,7 +33,6 @@ def main():
     # Check if API key is in environment
     if not os.getenv('GEMINI_API_KEY'):
         print("No GEMINI_API_KEY found in environment variables.")
-        api_key = input("Enter your Gemini API key (or press Enter to exit): ")
         if not api_key:
             print("No API key provided. Exiting.")
             return
