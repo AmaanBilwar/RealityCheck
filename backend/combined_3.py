@@ -11,7 +11,7 @@ import time
 import concurrent.futures
 import boto3
 from transformers import pipeline
-from google import genai
+from google import generativeai as genai
 import os
 import numpy as np
 from typing import List, Dict, Any, Optional

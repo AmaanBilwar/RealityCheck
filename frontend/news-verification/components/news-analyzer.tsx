@@ -24,6 +24,7 @@ interface UpdateMessage {
   status: 'starting' | 'processing' | 'completed' | 'error' | 'warning' | 'info' | 'done';
   message: string;
   analysis_id?: string;
+  document_id?: string;
   data?: any;
 }
 
@@ -50,7 +51,7 @@ export default function NewsAnalyzer() {
     }
   }, [inputValue, inputType])
 
-    const handleAnalyze = async () => {
+  const handleAnalyze = async () => {
     setErrorMessage(null)
     setStreamingUpdates([])
     setProgress(0)
@@ -111,12 +112,14 @@ export default function NewsAnalyzer() {
           // Set up decoder and buffer for processing chunks of text
           const decoder = new TextDecoder();
           let buffer = '';
+          let savedDocumentId = null;
           
           // Process the stream
           while (true) {
             const { done, value } = await reader.read();
             
             if (done) {
+              console.log("Stream completed");
               break;
             }
             
@@ -153,16 +156,45 @@ export default function NewsAnalyzer() {
                     setProgress(5);
                   }
                   
+                  // Save document ID when database save is successful
+                  if (update.status === 'info' && update.document_id) {
+                    savedDocumentId = update.document_id;
+                    console.log("Document saved with ID:", savedDocumentId);
+                  }
+                  
                   // Handle completion
                   if (update.status === 'completed' && update.data?.result_data) {
                     setAnalysisData(update.data.result_data);
                     setAnalysisComplete(true);
                     setProgress(100);
-                    reader.cancel(); // Close the stream
-                    break;
                   } else if (update.status === 'done') {
                     setProgress(100);
-                    reader.cancel(); // Close the stream
+                    // If we haven't set analysis data yet but have a saved document ID,
+                    // we should fetch the complete analysis
+                    if (!analysisComplete && savedDocumentId) {
+                      try {
+                        // Fetch the completed analysis from the server
+                        const analysisResponse = await axios.get(`http://localhost:8000/api/thread/${savedDocumentId}`);
+                        if (analysisResponse.data && analysisResponse.data.Thread_Data) {
+                          console.log("Fetched final analysis data:", analysisResponse.data);
+                          setAnalysisData(analysisResponse.data.Thread_Data[0]);
+                          setAnalysisComplete(true);
+                          
+                          // Navigate to the thread page if document was saved
+                          if (savedDocumentId) {
+                            // Store the data in localStorage for the thread page
+                            localStorage.setItem('currentThreadData', JSON.stringify(analysisResponse.data.Thread_Data));
+                            
+                            // Wait a moment to ensure state updates are processed
+                            setTimeout(() => {
+                              router.push(`/thread/${savedDocumentId}`);
+                            }, 500);
+                          }
+                        }
+                      } catch (fetchError) {
+                        console.error("Error fetching final analysis:", fetchError);
+                      }
+                    }
                     break;
                   }
                 } catch (error) {
@@ -170,6 +202,22 @@ export default function NewsAnalyzer() {
                 }
               }
             }
+          }
+          
+          // When stream is complete, mark analysis as no longer in progress
+          setIsAnalyzing(false);
+          
+          // If we have a document ID but analysis isn't complete, ensure we navigate
+          if (savedDocumentId) {
+            console.log("Stream complete, navigating to thread:", savedDocumentId);
+            // Ensure we set the final progress state
+            setProgress(100);
+            setCurrentStep("Analysis complete. Redirecting to results...");
+            
+            // Wait a moment to ensure state updates are processed
+            setTimeout(() => {
+              router.push(`/thread/${savedDocumentId}`);
+            }, 800);
           }
         } catch (streamError) {
           console.error("Stream error:", streamError);
@@ -194,7 +242,6 @@ export default function NewsAnalyzer() {
       }
     }
   }
-
   return (
     <div className="max-w-3xl mx-auto space-y-8 p-4">
       <Card>
