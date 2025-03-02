@@ -56,6 +56,15 @@ def analyze_article_with_bedrock(article_text):
         print(f"Error calling Bedrock: {str(e)}")
         return {"score": 0.5, "reasoning": "Error in analysis"}
 
+def analyze_article_with_pipeline(article_text):
+    # Use a pipeline as a high-level helper
+    from transformers import pipeline
+
+    pipe = pipeline("text-classification", model="dhruvpal/fake-news-bert")
+    result = pipe(article_text)
+    return result
+
+
 def load_text_file(file_path):
     """Load article text from a text file."""
     try:
