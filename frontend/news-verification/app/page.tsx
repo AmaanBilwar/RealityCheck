@@ -16,7 +16,7 @@ export default function Home() {
           <div className="flex-1">
             <header className="border-b">
               <div className="container flex h-16 items-center justify-between px-4 md:px-6">
-                <h1 className="text-xl font-semibold tracking-tight">NewsBot</h1>
+                <h1 className="text-xl font-semibold tracking-tight">RealityCheck</h1>
                 <div className="flex items-center space-x-4">
                   <span className="text-sm text-muted-foreground">Intelligent News Verification System</span>
                   <ModeToggle />

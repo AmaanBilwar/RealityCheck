@@ -1,12 +1,12 @@
 "use client"
-
-import { useState } from "react"
+import axios from "axios"
+import { useState, useEffect } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, LinkIcon, MessageSquare } from "lucide-react"
+import { Loader2, LinkIcon, MessageSquare, AlertCircle } from "lucide-react"
 import AnalysisResults from "@/components/analysis-results"
 
 export default function NewsAnalyzer() {
@@ -15,46 +15,75 @@ export default function NewsAnalyzer() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisComplete, setAnalysisComplete] = useState(false)
   const [analysisData, setAnalysisData] = useState<any>(null)
+  const [urlError, setUrlError] = useState(false)
 
-  const handleAnalyze = async () => {
-    if (!inputValue.trim()) return
-
-    setIsAnalyzing(true)
-    setAnalysisComplete(false)
-
+  // Validate URL whenever input changes
+  useEffect(() => {
+    if (inputType === "url" && inputValue) {
+      setUrlError(!isValidUrl(inputValue))
+    } else {
+      setUrlError(false)
+    }
+  }, [inputValue, inputType])
+  
+  // validate the URL
+  const isValidUrl = (url: string) => {
     try {
-      // In a real implementation, this would call your backend API
-      // that connects to the agents shown in the diagram
-      await new Promise((resolve) => setTimeout(resolve, 2000)) // Simulate API call
-
-      // Mock response data
-      const mockData = {
-        highlights: [
-          { text: "The study found a 25% increase in renewable energy adoption.", sentiment: "positive" },
-          { text: "Critics argue the methodology is flawed and results are overstated.", sentiment: "negative" },
-          { text: "Government officials have not yet responded to the findings.", sentiment: "neutral" },
-        ],
-        overallSentiment: "mixed",
-        relatedSources: [
-          { title: "Similar study from Stanford University", url: "#", reliability: "high" },
-          { title: "Contradicting report from Industry Association", url: "#", reliability: "medium" },
-          { title: "Previous research on the same topic", url: "#", reliability: "high" },
-        ],
-        factChecks: [
-          { claim: "25% increase in renewable energy", verdict: "Mostly True", source: "EnergyFact.org" },
-          { claim: "Methodology is flawed", verdict: "Disputed", source: "ScienceCheck" },
-        ],
-      }
-
-      setAnalysisData(mockData)
-      setAnalysisComplete(true)
+      new URL(url)
+      return true
     } catch (error) {
-      console.error("Analysis failed:", error)
-    } finally {
-      setIsAnalyzing(false)
+      return false
     }
   }
 
+  const handleAnalyze = async () => {
+    if (!inputValue.trim()) return
+    
+    // Double check URL validity before proceeding
+    if (inputType === "url" && !isValidUrl(inputValue)) {
+      setUrlError(true)
+      return
+    }
+  
+    setIsAnalyzing(true)
+    setAnalysisComplete(false)
+  
+    try {
+      let response;
+      
+      // Different API endpoints based on input type
+      if (inputType === "url") {
+        // Call URL-specific endpoint
+        response = await axios.post('http://localhost:8000/api/analyze_url', {
+          url: inputValue,
+        });
+      } else {
+        // Call text-specific endpoint
+        response = await axios.post('http://localhost:8000/api/news_input', {
+          text: inputValue,
+        });
+      }
+      
+      if (response.status !== 200) {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = response.data;
+      console.log(`Analysis results for ${inputType}:`, data.analysis);
+      
+      // Update the state with the received data
+      setAnalysisData(data.analysis);
+      setAnalysisComplete(true);
+    } catch (error) {
+      console.error("Analysis failed:", error);
+      // You might want to show an error message to the user
+      setAnalysisComplete(false);
+      setAnalysisData(null);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
+  
   return (
     <div className="space-y-6">
       <Card>
@@ -63,19 +92,28 @@ export default function NewsAnalyzer() {
           <CardDescription>Provide a news article URL or paste text content for analysis</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs value={inputType} onValueChange={(v) => setInputType(v as "url" | "text")} className="w-full">
+          <Tabs value={inputType} onValueChange={(v: string) => setInputType(v as "url" | "text")} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="url">Article URL</TabsTrigger>
               <TabsTrigger value="text">Text Content</TabsTrigger>
             </TabsList>
             <TabsContent value="url" className="mt-4">
               <div className="flex flex-col space-y-4">
-                <Input
-                  placeholder="https://example.com/news-article"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  disabled={isAnalyzing}
-                />
+                <div>
+                  <Input
+                    placeholder="https://example.com/news-article"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    disabled={isAnalyzing}
+                    className={urlError ? "border-red-500 focus-visible:ring-red-500" : ""}
+                  />
+                  {urlError && (
+                    <div className="flex items-center mt-2 text-red-500 text-sm">
+                      <AlertCircle className="h-4 w-4 mr-1" />
+                      <span>Please enter a valid URL</span>
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center text-sm text-muted-foreground">
                   <LinkIcon className="mr-2 h-4 w-4" />
                   Enter the full URL of the news article you want to analyze
@@ -100,7 +138,11 @@ export default function NewsAnalyzer() {
           </Tabs>
         </CardContent>
         <CardFooter>
-          <Button onClick={handleAnalyze} disabled={!inputValue.trim() || isAnalyzing} className="w-full sm:w-auto">
+          <Button 
+            onClick={handleAnalyze} 
+            disabled={!inputValue.trim() || isAnalyzing || (inputType === "url" && urlError)} 
+            className="w-full sm:w-auto"
+          >
             {isAnalyzing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isAnalyzing ? "Analyzing..." : "Analyze Content"}
           </Button>
@@ -113,8 +155,12 @@ export default function NewsAnalyzer() {
             <div className="flex flex-col items-center justify-center space-y-4 py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <div className="text-center">
-                <p className="font-medium">Processing your content</p>
-                <p className="text-sm text-muted-foreground">Our AI agents are analyzing the information...</p>
+                <p className="font-medium">Processing your {inputType === "url" ? "article URL" : "text content"}</p>
+                <p className="text-sm text-muted-foreground">
+                  {inputType === "url" 
+                    ? "Our AI agents are fetching and analyzing the article..." 
+                    : "Our AI agents are analyzing the information..."}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -125,4 +171,3 @@ export default function NewsAnalyzer() {
     </div>
   )
 }
-
