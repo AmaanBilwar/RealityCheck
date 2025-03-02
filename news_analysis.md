@@ -1,0 +1,1 @@
+The Ukrainian leader was told to leave the White House after an angry exchange with the US president.

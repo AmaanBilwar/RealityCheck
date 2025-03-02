@@ -1,1 +1,3 @@
 # RealityCheck
+
+## Table of Contents
