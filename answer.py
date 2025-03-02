@@ -1,47 +1,118 @@
-import os
-import boto3
-import google.generativeai as genai
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
+import os
+import json
+import numpy as np
+from typing import List, Dict, Any, Optional
+import faiss
+from sentence_transformers import SentenceTransformer
+import uvicorn
 
-# Gemini API Key Configuration
-api_key = os.getenv("GEMINI_API_KEY", "AIzaSyDNkMMcjPU9mSFtEdJM3fVtf2rRqFzlzbU")
-genai.configure(api_key=api_key)
+app = FastAPI(title="Simple RAG API")
 
-# Create a FastAPI app
-app = FastAPI(title="RealityCheck Backend API")
-p
-# S3 configuration
-S3_BUCKET = os.getenv("S3_BUCKET", "your-bucket-name")
-S3_KEY_KNOWLEDGE = os.getenv("S3_KEY_KNOWLEDGE", "knowledge.txt")
+# Define models
+class QueryRequest(BaseModel):
+    query: str
+    top_k: int = 5
 
-# Initialize boto3 S3 client
-s3_client = boto3.client("s3")
+class Document(BaseModel):
+    id: str
+    content: str
+    metadata: Optional[Dict[str, Any]] = None
+    score: Optional[float] = None
 
-class Question(BaseModel):
+class QueryResponse(BaseModel):
+    results: List[Document]
     query: str
 
-def get_knowledge_data():
-    try:
-        s3_response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_KEY_KNOWLEDGE)
-        return s3_response["Body"].read().decode("utf-8")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving S3 data: {e}")
+# Global variables
+embeddings_dir = "embeddings-s3-bucket"
+model = None
+index = None
+documents = {}
 
-def answer_query(query: str, knowledge: str):
-    prompt = f"Knowledge:\n{knowledge}\n\nQuestion: {query}\nAnswer:"
-    try:
-        response = genai.generate_content(prompt)
-        return response.text.strip() if response.text else "No response generated."
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating answer: {e}")
+@app.on_event("startup")
+async def startup_event():
+    global model, index, documents
+    
+    # Load the embedding model
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    
+    # Check if embeddings directory exists
+    if not os.path.exists(embeddings_dir):
+        raise Exception(f"Embeddings directory '{embeddings_dir}' not found")
+    
+    # Load documents and embeddings
+    embeddings_path = os.path.join(embeddings_dir, "embeddings.npy")
+    documents_path = os.path.join(embeddings_dir, "documents.json")
+    
+    if not os.path.exists(embeddings_path) or not os.path.exists(documents_path):
+        raise Exception(f"Required files not found in '{embeddings_dir}'")
+    
+    # Load embeddings
+    embeddings = np.load(embeddings_path)
+    
+    # Load documents
+    with open(documents_path, 'r') as f:
+        documents = json.load(f)
+    
+    # Create FAISS index
+    dimension = embeddings.shape[1]
+    index = faiss.IndexFlatL2(dimension)
+    index.add(embeddings.astype(np.float32))
+    
+    print(f"Loaded {len(documents)} documents with {embeddings.shape[0]} embeddings")
 
-@app.post("/ask")
-async def ask_question_endpoint(question: Question):
-    knowledge_data = get_knowledge_data()
-    answer = answer_query(question.query, knowledge_data)
-    return {"question": question.query, "answer": answer}
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
-@app.get("/")
-async def root():
-    return {"message": "RealityCheck backend is running."}
+@app.post("/query", response_model=QueryResponse)
+async def query(request: QueryRequest):
+    if model is None or index is None:
+        raise HTTPException(status_code=500, detail="Service not initialized properly")
+    
+    # Encode the query
+    query_embedding = model.encode([request.query])[0].reshape(1, -1).astype(np.float32)
+    
+    # Search for similar vectors
+    distances, indices = index.search(query_embedding, request.top_k)
+    
+    # Prepare results
+    results = []
+    for i, doc_idx in enumerate(indices[0]):
+        if doc_idx < len(documents):
+            doc = documents[str(doc_idx)]
+            results.append(
+                Document(
+                    id=str(doc_idx),
+                    content=doc["content"],
+                    metadata=doc.get("metadata", {}),
+                    score=float(1.0 - distances[0][i]/100.0)  # Convert distance to similarity score
+                )
+            )
+    
+    return QueryResponse(results=results, query=request.query)
+
+@app.get("/documents/{doc_id}", response_model=Document)
+async def get_document(doc_id: str):
+    if doc_id not in documents:
+        raise HTTPException(status_code=404, detail=f"Document with ID {doc_id} not found")
+    
+    doc = documents[doc_id]
+    return Document(
+        id=doc_id,
+        content=doc["content"],
+        metadata=doc.get("metadata", {})
+    )
+
+# Utility endpoint to get document count
+@app.get("/stats")
+async def get_stats():
+    return {
+        "document_count": len(documents),
+        "embeddings_directory": embeddings_dir
+    }
+
+if __name__ == "__main__":
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
